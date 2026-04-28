@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""
+🚨 TOKEN WARNING SYSTEM
+Sistema inteligente de advertencia antes de operaciones costosas
+ 
+Diego Mercedes Llauger (2026-0048)
+Ingeniería en Ciberseguridad | Universidad Dominicano Americana
+"""
+ 
+from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+ 
+class CostLevel(Enum):
+    """Niveles de costo de operación"""
+    EXTREME = "🔴 EXTREMO"
+    HIGH = "🟠 ALTO"
+    MEDIUM = "🔵 MEDIO"
+    LOW = "🟢 BAJO"
+    MINIMAL = "⚫ MÍNIMO"
+ 
+ 
+@dataclass
+class OperationCost:
+    """Información de costo de una operación"""
+    name: str
+    min_tokens: int
+    max_tokens: int
+    avg_tokens: int
+    level: CostLevel
+    description: str
+    warning: str
+    examples: List[str]
+    recommendation: str
+ 
+ 
+class TokenWarningSystem:
+    """
+    Sistema de advertencia de tokens.
+    
+    Verifica ANTES de ejecutar operaciones si queda suficiente presupuesto.
+    """
+    
+    # Límites por modelo (Haiku por defecto)
+    MODEL_LIMITS = {
+        "Haiku 4.5": 190000,
+        "Sonnet 4.5": 200000,
+        "Opus 4.5": 200000,
+    }
+    
+    # OPERACIONES Y SUS COSTOS
+    OPERATION_COSTS: Dict[str, OperationCost] = {
+        # EXTREMO
+        "analyze_long_document": OperationCost(
+            name="Análisis de documento largo",
+            min_tokens=2000,
+            max_tokens=5000,
+            avg_tokens=3500,
+            level=CostLevel.EXTREME,
+            description="Analizar PDF, documento o código >50 líneas",
+            warning="⚠️ COSTO EXTREMO: Consumirá 2,000-5,000 tokens",
+            examples=[
+                "PDF de 50+ páginas",
+                "Código completo de proyecto (>200 líneas)",
+                "Múltiples archivos simultáneamente"
+            ],
+            recommendation="✓ MEJOR: Sube solo archivo a GitHub, comparte URL"
+        ),
+        
+        "complex_code_generation": OperationCost(
+            name="Generación de código complejo",
+            min_tokens=1500,
+            max_tokens=3000,
+            avg_tokens=2250,
+            level=CostLevel.EXTREME,
+            description="Sistema multiagente, arquitectura compleja",
+            warning="⚠️ COSTO EXTREMO: Consumirá 1,500-3,000 tokens",
+            examples=[
+                "Sistema de 5+ agentes",
+                "Análisis de arquitectura completa",
+                "Refactorización profunda de codebase"
+            ],
+            recommendation="✓ MEJOR: Divide en partes pequeñas"
+        ),
+        
+        # ALTO
+        "full_agent_pipeline": OperationCost(
+            name="Pipeline completo (Agentes 1-5)",
+            min_tokens=1200,
+            max_tokens=2000,
+            avg_tokens=1600,
+            level=CostLevel.HIGH,
+            description="Ejecutar todos los agentes de análisis",
+            warning="⚠️ COSTO ALTO: Consumirá 1,200-2,000 tokens",
+            examples=[
+                "Ejecutar Router + Intención + Ambigüedad + Validación + Generador",
+                "Validación de 5 variantes de prompt",
+                "Análisis completo de proyecto"
+            ],
+            recommendation="✓ USA CUANDO: Necesites decisión final importante"
+        ),
+        
+        "multiple_prompt_variants": OperationCost(
+            name="Generación de 5 prompts alternativos",
+            min_tokens=600,
+            max_tokens=1200,
+            avg_tokens=900,
+            level=CostLevel.HIGH,
+            description="Generar y evaluar múltiples versiones",
+            warning="⚠️ COSTO ALTO: Consumirá 600-1,200 tokens",
+            examples=[
+                "3-5 prompts con diferentes técnicas",
+                "Comparación de enfoques",
+                "Validación de calidad en todas"
+            ],
+            recommendation="✓ USA CUANDO: Necesites opciones múltiples"
+        ),
+        
+        # MEDIO
+        "two_agent_analysis": OperationCost(
+            name="Análisis de 2 agentes (Intención + Ambigüedad)",
+            min_tokens=400,
+            max_tokens=800,
+            avg_tokens=600,
+            level=CostLevel.MEDIUM,
+            description="Análisis inicial del prompt",
+            warning="ℹ️ COSTO MEDIO: Consumirá 400-800 tokens",
+            examples=[
+                "Router + Intención",
+                "Intención + Ambigüedad",
+                "Validación anticipada"
+            ],
+            recommendation="✓ USA FRECUENTEMENTE: Es eficiente"
+        ),
+        
+        "concept_explanation": OperationCost(
+            name="Explicación 3-niveles (simple/intermedio/técnico)",
+            min_tokens=300,
+            max_tokens=600,
+            avg_tokens=450,
+            level=CostLevel.MEDIUM,
+            description="Explicar concepto o fragmento de código",
+            warning="ℹ️ COSTO MEDIO: Consumirá 300-600 tokens",
+            examples=[
+                "Explicar documentación técnica",
+                "Desglosar código confuso",
+                "3 niveles de comprensión"
+            ],
+            recommendation="✓ USA CUANDO: Necesites entender algo específico"
+        ),
+        
+        # BAJO
+        "simple_question": OperationCost(
+            name="Pregunta simple",
+            min_tokens=50,
+            max_tokens=200,
+            avg_tokens=125,
+            level=CostLevel.LOW,
+            description="¿Qué es X? ¿Cómo funciona Y?",
+            warning="✓ COSTO BAJO: Consumirá 50-200 tokens",
+            examples=[
+                "¿Qué es una variable?",
+                "¿Cómo se usa este comando?",
+                "Correcciones rápidas"
+            ],
+            recommendation="✓ USA LIBREMENTE: Muy barato"
+        ),
+        
+        "conversational": OperationCost(
+            name="Chat conversacional",
+            min_tokens=100,
+            max_tokens=300,
+            avg_tokens=200,
+            level=CostLevel.LOW,
+            description="Seguimiento de tema, preguntas cortas",
+            warning="✓ COSTO BAJO: Consumirá 100-300 tokens",
+            examples=[
+                "Aclaraciones sobre tema anterior",
+                "Respuestas cortas",
+                "Preguntas de seguimiento"
+            ],
+            recommendation="✓ USA LIBREMENTE: Muy barato"
+        ),
+    }
+    
+    def __init__(self, current_tokens_spent: int = 0, model: str = "Haiku 4.5"):
+        """
+        Inicializa el sistema.
+        
+        Args:
+            current_tokens_spent: Tokens ya gastados esta sesión
+            model: Modelo que estás usando (Haiku/Sonnet/Opus)
+        """
+        self.current_tokens_spent = current_tokens_spent
+        self.model = model
+        self.limit = self.MODEL_LIMITS.get(model, 190000)
+        self.tokens_remaining = self.limit - current_tokens_spent
+        self.total_messages_available = max(0, self.tokens_remaining // 680)
+    
+    def check_operation(
+        self,
+        operation_key: str,
+        allow_proceed: bool = False
+    ) -> Tuple[bool, str]:
+        """
+        Verifica si una operación es segura.
+        
+        Returns:
+            (bool, str): (es_seguro, mensaje_advertencia)
+        """
+        
+        if operation_key not in self.OPERATION_COSTS:
+            return False, f"❌ Operación '{operation_key}' no reconocida"
+        
+        operation = self.OPERATION_COSTS[operation_key]
+        messages_needed = max(1, operation.avg_tokens // 680)
+        
+        # Calcular si hay suficientes tokens
+        is_safe = operation.avg_tokens <= self.tokens_remaining
+        
+        # Construir mensaje
+        message = self._build_warning_message(operation, messages_needed, is_safe)
+        
+        return is_safe, message
+    
+    def _build_warning_message(
+        self,
+        operation: OperationCost,
+        messages_needed: int,
+        is_safe: bool
+    ) -> str:
+        """Construye el mensaje de advertencia personalizado"""
+        
+        status_icon = "✅" if is_safe else "❌"
+        status_text = "PUEDES PROCEDER" if is_safe else "NO RECOMENDADO"
+        
+        message = f"""
+╔════════════════════════════════════════════════════════════╗
+║  {status_icon} ADVERTENCIA DE GASTO - {operation.level.value}
+╚════════════════════════════════════════════════════════════╝
+ 
+📋 OPERACIÓN: {operation.name}
+   {operation.description}
+ 
+⚠️  {operation.warning}
+ 
+📊 ANÁLISIS:
+   • Tokens requeridos: {operation.avg_tokens:,} (aprox)
+   • Rango: {operation.min_tokens:,} - {operation.max_tokens:,}
+   • Mensajes que usará: ~{messages_needed}
+   
+💰 TU PRESUPUESTO:
+   • Tokens gastados: {self.current_tokens_spent:,}
+   • Tokens restantes: {self.tokens_remaining:,}
+   • Mensajes disponibles: ~{self.total_messages_available}
+   • Modelo: {self.model}
+ 
+📌 RECOMENDACIÓN:
+   {operation.recommendation}
+ 
+🔴 VEREDICTO: {status_text}
+   {'✓ Tienes suficientes tokens para esta operación' if is_safe else '❌ Te quedan pocos tokens. Considera alternativa más barata.'}
+"""
+        return message
+    
+    def suggest_alternatives(self, expensive_operation: str) -> str:
+        """Sugiere operaciones alternativas más baratas"""
+        
+        operation = self.OPERATION_COSTS.get(expensive_operation)
+        if not operation:
+            return ""
+        
+        alternatives = []
+        for op_key, op_info in self.OPERATION_COSTS.items():
+            if op_info.level in [CostLevel.LOW, CostLevel.MINIMAL]:
+                alternatives.append(f"  • {op_info.name} (~{op_info.avg_tokens} tokens)")
+        
+        return f"""
+🔄 ALTERNATIVAS MÁS BARATAS:
+{''.join(alternatives)}
+ 
+💡 CONSEJO: Divide la tarea en partes más pequeñas.
+"""
+    
+    def simulate_multiple_operations(
+        self,
+        operations: List[str]
+    ) -> Dict[str, any]:
+        """
+        Simula ejecutar múltiples operaciones seguidas.
+        
+        Útil para planificar sesiones.
+        """
+        
+        total_tokens = 0
+        results = {
+            "operations": [],
+            "total_tokens": 0,
+            "would_exceed": False,
+            "final_remaining": self.tokens_remaining
+        }
+        
+        for op_key in operations:
+            if op_key not in self.OPERATION_COSTS:
+                continue
+            
+            op = self.OPERATION_COSTS[op_key]
+            total_tokens += op.avg_tokens
+            
+            would_exceed = (self.current_tokens_spent + total_tokens) > self.limit
+            
+            results["operations"].append({
+                "name": op.name,
+                "cost": op.avg_tokens,
+                "cumulative": total_tokens,
+                "safe": not would_exceed
+            })
+            
+            if would_exceed:
+                results["would_exceed"] = True
+                break
+        
+        results["total_tokens"] = total_tokens
+        results["final_remaining"] = self.tokens_remaining - total_tokens
+        
+        return results
+    
+    def get_status_report(self) -> str:
+        """Genera un reporte de estado actual"""
+        
+        percentage = (self.current_tokens_spent / self.limit) * 100
+        
+        status = "🟢 BAJO" if percentage < 50 else "🟡 MEDIO" if percentage < 80 else "🔴 ALTO"
+        
+        return f"""
+╔════════════════════════════════════════════════════════════╗
+║  📊 ESTADO DE TOKENS - {status}
+╚════════════════════════════════════════════════════════════╝
+ 
+📈 CONSUMO:
+   • Tokens gastados: {self.current_tokens_spent:,} / {self.limit:,}
+   • Porcentaje: {percentage:.1f}%
+   • Tokens restantes: {self.tokens_remaining:,}
+ 
+💬 MENSAJES:
+   • Disponibles (aprox): ~{self.total_messages_available}
+   • Consumo promedio: ~680 tokens/mensaje
+   • Proyección: {(self.limit - self.current_tokens_spent) // 680} mensajes más
+ 
+🎯 RECOMENDACIÓN:
+   {'✓ Usa sin preocupaciones' if percentage < 50 else '⚠️ Sé selectivo con operaciones costosas' if percentage < 80 else '🔴 Minimiza gasto. Usa solo lo esencial.'}
+"""
+ 
+ 
+# EJEMPLO DE USO
+if __name__ == "__main__":
+    # Inicializar con Haiku, 30,000 tokens ya gastados
+    warning_system = TokenWarningSystem(
+        current_tokens_spent=30000,
+        model="Haiku 4.5"
+    )
+    
+    # Verificar operación
+    is_safe, message = warning_system.check_operation("full_agent_pipeline")
+    print(message)
+    
+    # Sugerir alternativas si no es seguro
+    if not is_safe:
+        alternatives = warning_system.suggest_alternatives("full_agent_pipeline")
+        print(alternatives)
+    
+    # Simular múltiples operaciones
+    print("\n" + "="*60)
+    print("SIMULACIÓN DE 3 OPERACIONES SEGUIDAS:")
+    print("="*60)
+    simulation = warning_system.simulate_multiple_operations([
+        "simple_question",
+        "concept_explanation",
+        "two_agent_analysis"
+    ])
+    
+    for op in simulation["operations"]:
+        print(f"  {op['name']}: {op['cost']:,} tokens (total acumulado: {op['cumulative']:,})")
+    
+    print(f"\nTotal: {simulation['total_tokens']:,} tokens")
+    print(f"Te quedarían: {simulation['final_remaining']:,} tokens")
+    
+    # Reporte de estado
+    print("\n" + warning_system.get_status_report())
