@@ -1,0 +1,198 @@
+"""
+📋 MATRIZ DE DECISIÓN: CUÁNDO ADVERTIR / PROCEDER / RECHAZAR
+ 
+Diego Mercedes Llauger (2026-0048)
+Ingeniería en Ciberseguridad | Universidad Dominicano Americana
+"""
+ 
+DECISION_MATRIX = {
+    # NIVEL EXTREMO + presupuesto bajo = ADVERTENCIA FUERTE
+    "extreme_low_budget": {
+        "condition": "Operación EXTREMA + tokens_remaining < avg_cost * 2",
+        "action": "⛔ DETENER Y ADVERTIR",
+        "message": """
+🛑 OPERACIÓN BLOQUEADA - PRESUPUESTO INSUFICIENTE
+ 
+Esta operación cuesta ~{cost} tokens.
+Tienes solo {remaining} tokens restantes.
+ 
+No puedo continuar. Alternativas:
+1. Espera a nueva sesión (próxima semana)
+2. Divide en partes más pequeñas
+3. Usa alternativa más barata (ver opciones debajo)
+        """,
+        "example": "Quieres análisis completo de código de 200 líneas pero tienes solo 1,500 tokens"
+    },
+    
+    # NIVEL EXTREMO + presupuesto medio = PEDIR CONFIRMACIÓN
+    "extreme_medium_budget": {
+        "condition": "Operación EXTREMA + tokens_remaining >= cost * 2",
+        "action": "⚠️ ADVERTENCIA + CONFIRMACIÓN",
+        "message": """
+⚠️ OPERACIÓN COSTOSA - CONFIRMA QUE QUIERES CONTINUAR
+ 
+Costo: ~{cost} tokens (~{messages} mensajes)
+Quedarías con: ~{remaining} tokens después
+ 
+¿Deseas continuar? (Escribe: SÍ / NO)
+        """,
+        "example": "Análisis completo de proyecto + generación de 5 prompts con 80,000 tokens restantes"
+    },
+    
+    # NIVEL ALTO + presupuesto bajo = ADVERTENCIA + SUGERENCIA
+    "high_low_budget": {
+        "condition": "Operación ALTA + tokens_remaining < cost * 3",
+        "action": "ℹ️ ADVERTENCIA + SUGERENCIA",
+        "message": """
+ℹ️ ADVERTENCIA: Operación costosa
+ 
+Costo: ~{cost} tokens
+Presupuesto: {remaining} tokens restantes
+ 
+SUGERENCIA: ¿Podrías dividir esto en 2 partes más pequeñas?
+Ejemplo: Primero análisis, luego generación de prompts
+ 
+¿Continuar o cambiar de estrategia?
+        """,
+        "example": "Full pipeline (1,600 tokens) con 5,000 tokens restantes"
+    },
+    
+    # NIVEL ALTO + presupuesto alto = PROCEDER CON AVISO
+    "high_high_budget": {
+        "condition": "Operación ALTA + tokens_remaining >= cost * 3",
+        "action": "✓ PROCEDER (con aviso)",
+        "message": """
+ℹ️ AVISO: Esta operación costará ~{cost} tokens
+ 
+Presupuesto después: ~{remaining} tokens (~{messages} mensajes más)
+        """,
+        "example": "Full pipeline (1,600 tokens) con 50,000 tokens restantes"
+    },
+    
+    # NIVEL MEDIO = SIEMPRE PROCEDER CON AVISO
+    "medium": {
+        "condition": "Operación MEDIA (sin importar presupuesto)",
+        "action": "✓ PROCEDER (con aviso transparente)",
+        "message": """
+ℹ️ INFORMACIÓN: Esta operación costará ~{cost} tokens
+ 
+Quedarás con ~{remaining} tokens disponibles
+        """,
+        "example": "Análisis 2 agentes (600 tokens)"
+    },
+    
+    # NIVEL BAJO = PROCEDER SIN AVISO
+    "low": {
+        "condition": "Operación BAJA (sin importar presupuesto)",
+        "action": "✓ PROCEDER (sin aviso innecesario)",
+        "message": "Proceder directamente sin advertencia",
+        "example": "Pregunta simple, chat conversacional"
+    }
+}
+ 
+ 
+# PROTOCOLO ESPECÍFICO PARA DIFERENTES ESCENARIOS
+SPECIAL_CASES = {
+    "repeat_content": {
+        "trigger": "Pedir análisis del MISMO documento/código 2+ veces en una sesión",
+        "action": "⚠️ ADVERTENCIA ESPECIAL",
+        "rule": """
+REGLA: Si ya analicé algo en esta sesión y lo pides de nuevo,
+recordaré el análisis anterior sin gastar nuevos tokens.
+ 
+❌ EVITAR: "Analiza esto" → [obtienes resultado] → "Analiza esto de nuevo"
+ 
+✓ EN SU LUGAR: Pide refinamientos: "Profundiza en X aspecto"
+                Usa el análisis anterior como base
+                Pregunta solo sobre cambios
+        """
+    },
+    
+    "document_caching": {
+        "trigger": "Subir documentos largos (>500 líneas)",
+        "action": "💡 SUGERENCIA AUTOMÁTICA",
+        "rule": """
+RECOMENDACIÓN AUTOMÁTICA:
+"Este código tiene 850 líneas. Mejor:
+1. Sube a GitHub
+2. Comparte la URL
+3. Yo trabajo con la URL (sin duplicar entrada)"
+ 
+AHORRO: ~80% en tokens input
+        """
+    },
+    
+    "chain_of_operations": {
+        "trigger": "Usuario quiere hacer 3+ operaciones costosas seguidas",
+        "action": "🔮 SIMULACIÓN + CONSULTA",
+        "rule": """
+PROTOCOLO:
+1. Simulo las 3+ operaciones juntas
+2. Muestro costo total proyectado
+3. Sugiero orden más eficiente
+4. Pregunto: "¿Ejecuto en este orden?"
+ 
+EJEMPLO:
+Quieres: Análisis + Generador + Validador
+ 
+Propongo:
+✓ Agente 1-2 (Análisis) = 600 tokens
+✓ Agente 3 (Generador) = 900 tokens  
+✓ Agente 4 (Validación) = 800 tokens
+___
+Total = 2,300 tokens (~3 mensajes)
+ 
+¿Continuar?
+        """
+    },
+    
+    "model_switching": {
+        "trigger": "Cambiar de Haiku a Sonnet mid-session",
+        "action": "⚠️ ADVERTENCIA DE COSTO",
+        "rule": """
+ADVERTENCIA AUTOMÁTICA:
+"Cambiarás a Sonnet 4.5 (10× más caro)
+Siguiente operación costará ~9,000 tokens en lugar de 900
+ 
+¿Estás seguro?"
+ 
+RECOMENDACIÓN: Guarda operaciones costosas para Sonnet,
+                usa Haiku para tareas normales
+        """
+    }
+}
+ 
+ 
+# RESUMEN VISUAL
+QUICK_REFERENCE = """
+╔════════════════════════════════════════════════════════════╗
+║  MATRIZ RÁPIDA DE DECISIÓN - TOKEN WARNINGS
+╚════════════════════════════════════════════════════════════╝
+ 
+Operación EXTREMA:
+  Presupuesto < 2× costo → ⛔ BLOQUEAR
+  Presupuesto ≥ 2× costo → ⚠️ CONFIRMAR
+ 
+Operación ALTA:
+  Presupuesto < 3× costo → ℹ️ ADVERTENCIA + SUGERENCIA
+  Presupuesto ≥ 3× costo → ✓ PROCEDER (aviso simple)
+ 
+Operación MEDIA:
+  Siempre → ✓ PROCEDER (aviso simple)
+ 
+Operación BAJA:
+  Siempre → ✓ PROCEDER (sin aviso)
+ 
+═══════════════════════════════════════════════════════════════
+ 
+REGLAS ESPECIALES:
+  1. Repetir análisis → Usar cache anterior
+  2. Documento > 500 líneas → Sugerir GitHub URL
+  3. 3+ operaciones → Simular primero
+  4. Cambiar modelo → Advertencia especial de costo
+ 
+═══════════════════════════════════════════════════════════════
+"""
+ 
+if __name__ == "__main__":
+    print(QUICK_REFERENCE)
