@@ -14,7 +14,7 @@ MODO DE USO:
  
 import argparse
 import sys
-from token_warning_system import TokenWarningSystem, CostLevel
+from tokenwarningsystem import TokenWarningSystem, CostLevel
  
  
 def list_all_operations():
